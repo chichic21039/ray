@@ -27,6 +27,7 @@
 #include "ray/common/task/task_spec.h"
 #include "src/ray/protobuf/common.pb.h"
 
+#include <string_view>
 namespace ray {
 
 /// Stores the task failure reason.
@@ -131,7 +132,7 @@ class TaskSpecBuilder {
   /// \return Reference to the builder object itself.
   TaskSpecBuilder &SetCommonTaskSpec(
       const TaskID &task_id,
-      const std::string name,
+      std::string_view name,
       const Language &language,
       const ray::FunctionDescriptor &function_descriptor,
       const JobID &job_id,
@@ -146,19 +147,19 @@ class TaskSpecBuilder {
       int64_t generator_backpressure_num_objects,
       const std::unordered_map<std::string, double> &required_resources,
       const std::unordered_map<std::string, double> &required_placement_resources,
-      const std::string &debugger_breakpoint,
+      std::string_view debugger_breakpoint,
       int64_t depth,
       const TaskID &submitter_task_id,
-      const std::string &call_site,
+      std::string_view call_site,
       const std::shared_ptr<rpc::RuntimeEnvInfo> runtime_env_info = nullptr,
-      const std::string &concurrency_group_name = "",
+      std::string_view concurrency_group_name = "",
       bool enable_task_events = true,
       const std::unordered_map<std::string, std::string> &labels = {},
       const LabelSelector &label_selector = {},
       const std::vector<FallbackOption> &fallback_strategy =
           std::vector<FallbackOption>()) {
     message_->set_type(TaskType::NORMAL_TASK);
-    message_->set_name(name);
+    message_->set_name(name.data(), name.size());
     message_->set_language(language);
     *message_->mutable_function_descriptor() = function_descriptor->GetMessage();
     message_->set_job_id(job_id.Binary());
@@ -179,13 +180,13 @@ class TaskSpecBuilder {
                                                    required_resources.end());
     message_->mutable_required_placement_resources()->insert(
         required_placement_resources.begin(), required_placement_resources.end());
-    message_->set_debugger_breakpoint(debugger_breakpoint);
+    message_->set_debugger_breakpoint(debugger_breakpoint.data(), debugger_breakpoint.size());
     message_->set_depth(depth);
-    message_->set_call_site(call_site);
+    message_->set_call_site(call_site.data(), call_site.size());
     if (runtime_env_info) {
       message_->mutable_runtime_env_info()->CopyFrom(*runtime_env_info);
     }
-    message_->set_concurrency_group_name(concurrency_group_name);
+    message_->set_concurrency_group_name(concurrency_group_name.data(), concurrency_group_name.size());
     message_->set_enable_task_events(enable_task_events);
     message_->mutable_labels()->insert(labels.begin(), labels.end());
     label_selector.ToProto(message_->mutable_label_selector());
