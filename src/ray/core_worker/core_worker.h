@@ -54,6 +54,7 @@
 #include "ray/raylet_rpc_client/raylet_client_interface.h"
 #include "ray/util/shared_lru.h"
 #include "src/ray/protobuf/pubsub.pb.h"
+#include <string_view>
 
 namespace ray::core {
 
@@ -861,9 +862,9 @@ class CoreWorker : public std::enable_shared_from_this<CoreWorker> {
       int max_retries,
       bool retry_exceptions,
       const rpc::SchedulingStrategy &scheduling_strategy,
-      const std::string &debugger_breakpoint,
-      const std::string &serialized_retry_exception_allowlist = "",
-      const std::string &call_site = "",
+      std::string_view debugger_breakpoint,
+      std::string_view serialized_retry_exception_allowlist,
+      std::string_view call_site,
       const TaskID current_task_id = TaskID::Nil());
 
   /// Create an actor.
@@ -1405,10 +1406,10 @@ class CoreWorker : public std::enable_shared_from_this<CoreWorker> {
       int64_t num_returns,
       const std::unordered_map<std::string, double> &required_resources,
       const std::unordered_map<std::string, double> &required_placement_resources,
-      const std::string &debugger_breakpoint,
+      std::string_view debugger_breakpoint,
       int64_t depth,
       const std::string &serialized_runtime_env_info,
-      const std::string &call_site,
+      std::string_view call_site,
       const TaskID &main_thread_current_task_id,
       const std::string &concurrency_group_name = "",
       bool include_job_config = false,

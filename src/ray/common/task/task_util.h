@@ -26,6 +26,7 @@
 #include "ray/common/scheduling/label_selector.h"
 #include "ray/common/task/task_spec.h"
 #include "src/ray/protobuf/common.pb.h"
+#include <string_view>
 
 namespace ray {
 
@@ -146,10 +147,10 @@ class TaskSpecBuilder {
       int64_t generator_backpressure_num_objects,
       const std::unordered_map<std::string, double> &required_resources,
       const std::unordered_map<std::string, double> &required_placement_resources,
-      const std::string &debugger_breakpoint,
+      std::string_view debugger_breakpoint,
       int64_t depth,
       const TaskID &submitter_task_id,
-      const std::string &call_site,
+      std::string_view call_site,
       const std::shared_ptr<rpc::RuntimeEnvInfo> runtime_env_info = nullptr,
       const std::string &concurrency_group_name = "",
       bool enable_task_events = true,
@@ -196,7 +197,7 @@ class TaskSpecBuilder {
   TaskSpecBuilder &SetNormalTaskSpec(
       int max_retries,
       bool retry_exceptions,
-      const std::string &serialized_retry_exception_allowlist,
+      std::string_view serialized_retry_exception_allowlist,
       const rpc::SchedulingStrategy &scheduling_strategy,
       const ActorID root_detached_actor_id) {
     message_->set_max_retries(max_retries);

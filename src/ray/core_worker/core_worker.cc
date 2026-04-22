@@ -1870,10 +1870,10 @@ void CoreWorker::BuildCommonTaskSpec(
     int64_t num_returns,
     const std::unordered_map<std::string, double> &required_resources,
     const std::unordered_map<std::string, double> &required_placement_resources,
-    const std::string &debugger_breakpoint,
+    std::string_view debugger_breakpoint,
     int64_t depth,
     const std::string &serialized_runtime_env_info,
-    const std::string &call_site,
+    std::string_view call_site,
     const TaskID &main_thread_current_task_id,
     const std::string &concurrency_group_name,
     bool include_job_config,
@@ -1963,9 +1963,9 @@ std::vector<rpc::ObjectReference> CoreWorker::SubmitTask(
     int max_retries,
     bool retry_exceptions,
     const rpc::SchedulingStrategy &scheduling_strategy,
-    const std::string &debugger_breakpoint,
-    const std::string &serialized_retry_exception_allowlist,
-    const std::string &call_site,
+    std::string_view debugger_breakpoint,
+    std::string_view serialized_retry_exception_allowlist,
+    std::string_view call_site,
     const TaskID current_task_id) {
   SubscribeToNodeChanges();
   RAY_CHECK(scheduling_strategy.scheduling_strategy_case() !=
