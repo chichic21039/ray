@@ -1,6 +1,4 @@
 import sys
-import warnings
-
 import pytest
 from pydantic import ValidationError
 
@@ -26,7 +24,6 @@ from ray.serve.autoscaling_policy import default_autoscaling_policy
 from ray.serve.config import (
     AutoscalingConfig,
     DeploymentActorConfig,
-    DeploymentMode,
     GangPlacementStrategy,
     GangRuntimeFailurePolicy,
     GangSchedulingConfig,
@@ -123,39 +120,13 @@ def test_autoscaling_config_validation():
     )
     assert non_default_autoscaling_config.policy.is_default_policy_function() is False
 
-    # look_back_period_s must be greater than metrics_interval_s
-    with pytest.warns(FutureWarning):
-        AutoscalingConfig(look_back_period_s=5.0, metrics_interval_s=10.0)
-    with pytest.warns(FutureWarning):
-        AutoscalingConfig(look_back_period_s=10.0, metrics_interval_s=10.0)
-    AutoscalingConfig(look_back_period_s=30.0, metrics_interval_s=10.0)
-    AutoscalingConfig(look_back_period_s=20.0, metrics_interval_s=10.0)
-
-
-def test_autoscaling_config_metrics_interval_s_deprecation_warning() -> None:
-    """Test that the metrics_interval_s deprecation warning is raised."""
-    # Warning is raised if we set metrics_interval_s to a non-default value
-    with pytest.warns(DeprecationWarning):
-        AutoscalingConfig(metrics_interval_s=5)
-
-    # ... even if the AutoscalingConfig is instantiated implicitly via the @serve.deployment decorator
-    with pytest.warns(DeprecationWarning):
-
-        @serve.deployment(autoscaling_config={"metrics_interval_s": 5})
-        class Foo:
-            ...
-
-    # ... or if it is deserialized from proto as part of a DeploymentConfig (presumably in the Serve Controller)
-    deployment_config_proto_bytes = DeploymentConfig(
-        autoscaling_config=AutoscalingConfig(metrics_interval_s=5)
-    ).to_proto_bytes()
-    with pytest.warns(DeprecationWarning):
-        DeploymentConfig.from_proto_bytes(deployment_config_proto_bytes)
-
-    # Default settings should not raise a warning
-    with warnings.catch_warnings():
-        warnings.simplefilter("error")
-        AutoscalingConfig()
+    # look_back_period_s must be greater than the replica metrics push interval.
+    with pytest.raises(ValidationError):
+        AutoscalingConfig(look_back_period_s=5.0)
+    with pytest.raises(ValidationError):
+        AutoscalingConfig(look_back_period_s=10.0)
+    AutoscalingConfig(look_back_period_s=30.0)
+    AutoscalingConfig(look_back_period_s=20.0)
 
 
 class TestDeploymentConfig:
@@ -905,38 +876,7 @@ class TestAutoscalingConfig:
         assert autoscaling_config.get_upscaling_factor() == 1
         assert autoscaling_config.get_downscaling_factor() == 1
 
-        autoscaling_config = AutoscalingConfig(smoothing_factor=0.4)
-        assert autoscaling_config.get_upscaling_factor() == 0.4
-        assert autoscaling_config.get_downscaling_factor() == 0.4
-
-        autoscaling_config = AutoscalingConfig(upscale_smoothing_factor=0.4)
-        assert autoscaling_config.get_upscaling_factor() == 0.4
-        assert autoscaling_config.get_downscaling_factor() == 1
-
-        autoscaling_config = AutoscalingConfig(downscale_smoothing_factor=0.4)
-        assert autoscaling_config.get_upscaling_factor() == 1
-        assert autoscaling_config.get_downscaling_factor() == 0.4
-
         autoscaling_config = AutoscalingConfig(
-            smoothing_factor=0.4,
-            upscale_smoothing_factor=0.1,
-            downscale_smoothing_factor=0.01,
-        )
-        assert autoscaling_config.get_upscaling_factor() == 0.1
-        assert autoscaling_config.get_downscaling_factor() == 0.01
-
-        autoscaling_config = AutoscalingConfig(
-            smoothing_factor=0.4,
-            upscaling_factor=0.5,
-            downscaling_factor=0.6,
-        )
-        assert autoscaling_config.get_upscaling_factor() == 0.5
-        assert autoscaling_config.get_downscaling_factor() == 0.6
-
-        autoscaling_config = AutoscalingConfig(
-            smoothing_factor=0.4,
-            upscale_smoothing_factor=0.1,
-            downscale_smoothing_factor=0.01,
             upscaling_factor=0.5,
             downscaling_factor=0.6,
         )
@@ -1158,77 +1098,73 @@ def test_config_schemas_forward_compatible():
 
 def test_http_options():
     HTTPOptions()
-    HTTPOptions(host="8.8.8.8", middlewares=[object()])
+    HTTPOptions(host="8.8.8.8")
 
-    # Test configs ignoring unknown keys (required for forward-compatibility)
-    HTTPOptions(new_version_config_key="this config is from newer version of Ray")
+    with pytest.raises(ValidationError):
+        HTTPOptions(new_version_config_key="this config is from newer version of Ray")
 
-    assert HTTPOptions(host=None).location == "NoServer"
-    assert HTTPOptions(location=None).location == "NoServer"
-    assert HTTPOptions(location=DeploymentMode.EveryNode).location == "EveryNode"
+    assert HTTPOptions(host=None).proxy_location == ProxyLocation.Disabled
+    assert (
+        HTTPOptions(proxy_location=ProxyLocation.EveryNode).proxy_location
+        == ProxyLocation.EveryNode
+    )
 
 
 def test_prepare_imperative_http_options():
     assert prepare_imperative_http_options(
         proxy_location=None,
         http_options=None,
-    ) == HTTPOptions(location=DeploymentMode.EveryNode)
+    ) == HTTPOptions(proxy_location=ProxyLocation.EveryNode)
 
     assert prepare_imperative_http_options(
         proxy_location=None,
         http_options={},
-    ) == HTTPOptions(location=DeploymentMode.EveryNode)
+    ) == HTTPOptions(proxy_location=ProxyLocation.EveryNode)
 
     assert prepare_imperative_http_options(
         proxy_location=None,
         http_options=HTTPOptions(**{}),
     ) == HTTPOptions(
-        location=DeploymentMode.HeadOnly
-    )  # in this case we can't know whether location was provided or not
+        proxy_location=ProxyLocation.HeadOnly
+    )  # in this case we can't know whether proxy_location was provided or not
 
     assert prepare_imperative_http_options(
         proxy_location=None,
         http_options=HTTPOptions(),
-    ) == HTTPOptions(location=DeploymentMode.HeadOnly)
+    ) == HTTPOptions(proxy_location=ProxyLocation.HeadOnly)
 
-    assert prepare_imperative_http_options(
-        proxy_location=None,
-        http_options={"test": "test"},
-    ) == HTTPOptions(location=DeploymentMode.EveryNode)
+    with pytest.raises(ValidationError):
+        prepare_imperative_http_options(
+            proxy_location=None, http_options={"test": "test"}
+        )
 
     assert prepare_imperative_http_options(
         proxy_location=None,
         http_options={"host": "0.0.0.0"},
-    ) == HTTPOptions(location=DeploymentMode.EveryNode, host="0.0.0.0")
+    ) == HTTPOptions(proxy_location=ProxyLocation.EveryNode, host="0.0.0.0")
 
     assert prepare_imperative_http_options(
         proxy_location=None,
-        http_options={"location": "NoServer"},
-    ) == HTTPOptions(location=DeploymentMode.NoServer)
+        http_options={"proxy_location": "Disabled"},
+    ) == HTTPOptions(proxy_location=ProxyLocation.Disabled)
 
     assert prepare_imperative_http_options(
         proxy_location=ProxyLocation.Disabled,
         http_options=None,
-    ) == HTTPOptions(location=DeploymentMode.NoServer)
+    ) == HTTPOptions(proxy_location=ProxyLocation.Disabled)
 
     assert prepare_imperative_http_options(
         proxy_location=ProxyLocation.HeadOnly,
         http_options={"host": "0.0.0.0"},
-    ) == HTTPOptions(location=DeploymentMode.HeadOnly, host="0.0.0.0")
+    ) == HTTPOptions(proxy_location=ProxyLocation.HeadOnly, host="0.0.0.0")
 
     assert prepare_imperative_http_options(
         proxy_location=ProxyLocation.HeadOnly,
-        http_options={"location": "NoServer"},
-    ) == HTTPOptions(location=DeploymentMode.HeadOnly)
+        http_options={"proxy_location": "Disabled"},
+    ) == HTTPOptions(proxy_location=ProxyLocation.HeadOnly)
 
     with pytest.raises(ValueError, match="not a valid ProxyLocation"):
         prepare_imperative_http_options(proxy_location="wrong", http_options=None)
-
-    # Pydantic v2 uses different error format for invalid enum values
-    with pytest.raises(ValidationError, match="Input should be"):
-        prepare_imperative_http_options(
-            proxy_location=None, http_options={"location": "123"}
-        )
 
     with pytest.raises(ValueError, match="Unexpected type"):
         prepare_imperative_http_options(proxy_location=None, http_options="wrong")
@@ -1244,8 +1180,37 @@ def test_with_proto():
     assert config == DeploymentConfig.from_proto_bytes(config.to_proto_bytes())
 
 
+<<<<<<< HEAD
 @pytest.mark.parametrize("use_deprecated_smoothing_factor", [True, False])
 def test_zero_default_proto(use_deprecated_smoothing_factor):
+=======
+def test_rolling_update_percentage_proto_roundtrip():
+    """Ensure `rolling_update_percentage` survives to_proto/from_proto.
+
+    Because the proto field is declared `optional double`, an explicit value
+    must round-trip losslessly, and an absent field (simulating an older
+    controller during a rolling upgrade) must fall back to the Python-level
+    default instead of a proto3 zero default.
+    """
+    # Explicit non-default value survives the round-trip.
+    config = DeploymentConfig(rolling_update_percentage=0.5)
+    roundtripped = DeploymentConfig.from_proto_bytes(config.to_proto_bytes())
+    assert roundtripped.rolling_update_percentage == 0.5
+
+    # Simulate an older controller that didn't carry this field: start from a
+    # valid proto (so the other non-optional fields satisfy Pydantic's
+    # validators on deserialization) and clear just `rolling_update_percentage`.
+    # Clearing the optional field makes HasField() return False, mimicking a
+    # proto serialized before this field existed.
+    proto = DeploymentConfig().to_proto()
+    proto.ClearField("rolling_update_percentage")
+    assert not proto.HasField("rolling_update_percentage")
+    deserialized = DeploymentConfig.from_proto(proto)
+    assert deserialized.rolling_update_percentage == DEFAULT_ROLLING_UPDATE_PERCENTAGE
+
+
+def test_zero_default_proto():
+>>>>>>> b2c2126091 (docs(serve): fix broken Anyscale MCP links and update README.ipynb)
     # Test that options set to zero (protobuf default value) still retain their
     # original value after being serialized and deserialized.
     autoscaling_config = {
@@ -1253,11 +1218,8 @@ def test_zero_default_proto(use_deprecated_smoothing_factor):
         "max_replicas": 2,
         "downscale_delay_s": 0,
     }
-    if use_deprecated_smoothing_factor:
-        autoscaling_config["smoothing_factor"] = 0.123
-    else:
-        autoscaling_config["upscaling_factor"] = 0.123
-        autoscaling_config["downscaling_factor"] = 0.123
+    autoscaling_config["upscaling_factor"] = 0.123
+    autoscaling_config["downscaling_factor"] = 0.123
 
     config = DeploymentConfig(autoscaling_config=autoscaling_config)
     serialized_config = config.to_proto_bytes()
@@ -1314,58 +1276,6 @@ def test_grpc_options():
         grpc_options = gRPCOptions(grpc_servicer_functions=grpc_servicer_functions)
         _ = grpc_options.grpc_servicer_func_callable
     assert "is not a callable function!" in str(exception)
-
-
-def test_proxy_location_to_deployment_mode():
-    assert (
-        ProxyLocation._to_deployment_mode(ProxyLocation.Disabled)
-        == DeploymentMode.NoServer
-    )
-    assert (
-        ProxyLocation._to_deployment_mode(ProxyLocation.HeadOnly)
-        == DeploymentMode.HeadOnly
-    )
-    assert (
-        ProxyLocation._to_deployment_mode(ProxyLocation.EveryNode)
-        == DeploymentMode.EveryNode
-    )
-
-    assert ProxyLocation._to_deployment_mode("Disabled") == DeploymentMode.NoServer
-    assert ProxyLocation._to_deployment_mode("HeadOnly") == DeploymentMode.HeadOnly
-    assert ProxyLocation._to_deployment_mode("EveryNode") == DeploymentMode.EveryNode
-
-    with pytest.raises(ValueError):
-        ProxyLocation._to_deployment_mode("Unknown")
-
-    with pytest.raises(TypeError):
-        ProxyLocation._to_deployment_mode({"some_other_obj"})
-
-
-def test_deployment_mode_to_proxy_location():
-    assert ProxyLocation._from_deployment_mode(None) is None
-
-    assert (
-        ProxyLocation._from_deployment_mode(DeploymentMode.NoServer)
-        == ProxyLocation.Disabled
-    )
-    assert (
-        ProxyLocation._from_deployment_mode(DeploymentMode.HeadOnly)
-        == ProxyLocation.HeadOnly
-    )
-    assert (
-        ProxyLocation._from_deployment_mode(DeploymentMode.EveryNode)
-        == ProxyLocation.EveryNode
-    )
-
-    assert ProxyLocation._from_deployment_mode("NoServer") == ProxyLocation.Disabled
-    assert ProxyLocation._from_deployment_mode("HeadOnly") == ProxyLocation.HeadOnly
-    assert ProxyLocation._from_deployment_mode("EveryNode") == ProxyLocation.EveryNode
-
-    with pytest.raises(ValueError):
-        ProxyLocation._from_deployment_mode("Unknown")
-
-    with pytest.raises(TypeError):
-        ProxyLocation._from_deployment_mode({"some_other_obj"})
 
 
 @pytest.mark.parametrize(

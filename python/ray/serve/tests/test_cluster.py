@@ -123,7 +123,7 @@ def test_node_failure(ray_cluster):
     worker_node = cluster.add_node(num_cpus=2)
 
     @serve.deployment(
-        version="1", num_replicas=5, health_check_period_s=1, max_ongoing_requests=1
+        num_replicas=5, health_check_period_s=1, max_ongoing_requests=1
     )
     def D(*args):
         time.sleep(0.1)
@@ -162,7 +162,7 @@ def test_replica_startup_status_transitions(ray_cluster):
 
     signal = SignalActor.remote()
 
-    @serve.deployment(version="1", ray_actor_options={"num_cpus": 2})
+    @serve.deployment(ray_actor_options={"num_cpus": 2})
     class E:
         async def __init__(self):
             await signal.wait.remote()
@@ -242,7 +242,6 @@ def test_gang_replica_startup_status_transitions(ray_cluster):
     signal = SignalActor.remote()
 
     @serve.deployment(
-        version="1",
         ray_actor_options={"num_cpus": 0.75},
         num_replicas=2,
         gang_scheduling_config=GangSchedulingConfig(gang_size=2),
@@ -425,7 +424,6 @@ def test_autoscale_upscaling_stuck_then_healthy(ray_cluster):
             "min_replicas": 1,
             "max_replicas": 2,
             "target_ongoing_requests": 1,
-            "metrics_interval_s": 0.1,
             "look_back_period_s": 0.5,
             "upscale_delay_s": 0,
             # If delay is large then the test will be stuck in UPSCALING state.

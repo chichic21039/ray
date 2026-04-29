@@ -27,7 +27,6 @@ from ray.serve._private.default_impl import create_cluster_node_info_cache
 from ray.serve._private.http_util import set_socket_reuse_port
 from ray.serve._private.utils import block_until_http_ready, format_actor_name
 from ray.serve.config import (
-    DeploymentMode,
     GangSchedulingConfig,
     HTTPOptions,
     ProxyLocation,
@@ -168,7 +167,7 @@ def test_multiple_routers(ray_cluster):
 
     ray.init(head_node.address)
     assert len(ray.nodes()) == 2
-    serve.start(http_options=dict(port=8005, location="EveryNode"))
+    serve.start(http_options=dict(port=8005, proxy_location="EveryNode"))
 
     @serve.deployment(
         num_replicas=2,
@@ -324,8 +323,8 @@ def test_no_http(ray_shutdown):
     # The following should have the same effect.
     options = [
         {"http_options": {"host": None}},
-        {"http_options": {"location": None}},
-        {"http_options": {"location": "NoServer"}},
+        {"http_options": {"proxy_location": None}},
+        {"http_options": {"proxy_location": "NoServer"}},
     ]
 
     address = ray.init(num_cpus=8)["address"]
@@ -361,7 +360,7 @@ def test_http_head_only(ray_cluster):
     ray.init(head_node.address)
     assert len(ray.nodes()) == 2
 
-    serve.start(http_options={"port": _get_random_port(), "location": "HeadOnly"})
+    serve.start(http_options={"port": _get_random_port(), "proxy_location": "HeadOnly"})
 
     # Only the controller and head node proxy should be started, both on the head node.
     actors = list_actors(address=head_node.address)
@@ -593,73 +592,73 @@ def test_build_app_task_uses_zero_cpus(ray_shutdown):
         {
             "proxy_location": None,
             "http_options": None,
-            "expected": HTTPOptions(location=DeploymentMode.EveryNode),
+            "expected": HTTPOptions(proxy_location=ProxyLocation.EveryNode),
         },
         {
             "proxy_location": None,
-            "http_options": {"test": "test"},  # location is not specified
+            "http_options": {},  # proxy_location is not specified
             "expected": HTTPOptions(
-                location=DeploymentMode.EveryNode
+                proxy_location=ProxyLocation.EveryNode
             ),  # using default proxy_location (to align with the case when `http_options` are None)
         },
         {
             "proxy_location": None,
             "http_options": {
-                "location": "NoServer"
-            },  # `location` is specified, but `proxy_location` is not
+                "proxy_location": "Disabled"
+            },  # `proxy_location` is specified in `http_options`
             "expected": HTTPOptions(
-                location=DeploymentMode.NoServer
-            ),  # using `location` value
+                proxy_location=ProxyLocation.Disabled
+            ),  # using `proxy_location` value
         },
         {
             "proxy_location": None,
-            "http_options": HTTPOptions(location=None),
-            "expected": HTTPOptions(location=DeploymentMode.NoServer),
+            "http_options": HTTPOptions(host=None),
+            "expected": HTTPOptions(proxy_location=ProxyLocation.Disabled),
         },
         {
             "proxy_location": None,
             "http_options": HTTPOptions(),
-            "expected": HTTPOptions(location=DeploymentMode.HeadOnly),
-        },  # using default location from HTTPOptions
+            "expected": HTTPOptions(proxy_location=ProxyLocation.HeadOnly),
+        },  # using default proxy_location from HTTPOptions
         {
             "proxy_location": None,
-            "http_options": HTTPOptions(location="NoServer"),
-            "expected": HTTPOptions(location=DeploymentMode.NoServer),
+            "http_options": HTTPOptions(proxy_location="Disabled"),
+            "expected": HTTPOptions(proxy_location=ProxyLocation.Disabled),
         },
         {
             "proxy_location": None,
-            "http_options": {"location": "NoServer"},
-            "expected": HTTPOptions(location=DeploymentMode.NoServer),
+            "http_options": {"proxy_location": "Disabled"},
+            "expected": HTTPOptions(proxy_location=ProxyLocation.Disabled),
         },
         {
             "proxy_location": "Disabled",
             "http_options": None,
-            "expected": HTTPOptions(location=DeploymentMode.NoServer),
+            "expected": HTTPOptions(proxy_location=ProxyLocation.Disabled),
         },
         {
             "proxy_location": "Disabled",
             "http_options": {},
-            "expected": HTTPOptions(location=DeploymentMode.NoServer),
+            "expected": HTTPOptions(proxy_location=ProxyLocation.Disabled),
         },
         {
             "proxy_location": "Disabled",
             "http_options": HTTPOptions(host="foobar"),
-            "expected": HTTPOptions(location=DeploymentMode.NoServer, host="foobar"),
+            "expected": HTTPOptions(proxy_location=ProxyLocation.Disabled, host="foobar"),
         },
         {
             "proxy_location": "Disabled",
             "http_options": {"host": "foobar"},
-            "expected": HTTPOptions(location=DeploymentMode.NoServer, host="foobar"),
+            "expected": HTTPOptions(proxy_location=ProxyLocation.Disabled, host="foobar"),
         },
         {
             "proxy_location": "Disabled",
-            "http_options": {"location": "HeadOnly"},
-            "expected": HTTPOptions(location=DeploymentMode.NoServer),
+            "http_options": {"proxy_location": "HeadOnly"},
+            "expected": HTTPOptions(proxy_location=ProxyLocation.Disabled),
         },
         {
             "proxy_location": ProxyLocation.Disabled,
-            "http_options": HTTPOptions(location=DeploymentMode.HeadOnly),
-            "expected": HTTPOptions(location=DeploymentMode.NoServer),
+            "http_options": HTTPOptions(proxy_location=ProxyLocation.HeadOnly),
+            "expected": HTTPOptions(proxy_location=ProxyLocation.Disabled),
         },
     ],
 )

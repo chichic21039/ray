@@ -35,7 +35,7 @@ from ray.serve._private.utils import (
     format_actor_name,
     is_grpc_enabled,
 )
-from ray.serve.config import DeploymentMode, HTTPOptions, gRPCOptions
+from ray.serve.config import HTTPOptions, ProxyLocation, gRPCOptions
 from ray.serve.schema import (
     LoggingConfig,
     ProxyDetails,
@@ -169,7 +169,7 @@ class ActorProxyWrapper(ProxyWrapper):
             )
 
         return proxy or proxy_actor_class.options(
-            num_cpus=http_options.num_cpus,
+            num_cpus=0,
             name=name,
             namespace=SERVE_NAMESPACE,
             lifetime="detached",
@@ -784,9 +784,9 @@ class ProxyStateManager:
     def _get_target_nodes(self, proxy_nodes) -> List[Tuple[str, str, str]]:
         """Return the list of (node_id, ip_address) to deploy HTTP and gRPC servers
         on."""
-        location = self._http_options.location
+        proxy_location = self._http_options.proxy_location
 
-        if location == DeploymentMode.NoServer:
+        if proxy_location == ProxyLocation.Disabled:
             return []
 
         target_nodes = [
@@ -795,7 +795,7 @@ class ProxyStateManager:
             if node_id in proxy_nodes
         ]
 
-        if location == DeploymentMode.HeadOnly:
+        if proxy_location == ProxyLocation.HeadOnly:
             nodes = [
                 (node_id, ip_address, instance_id)
                 for node_id, ip_address, instance_id in target_nodes

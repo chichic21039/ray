@@ -78,7 +78,6 @@ class TestDeploymentOptions:
     # Deployment options mapped to sample input
     deployment_options = {
         "name": "test",
-        "version": "abcd",
         "num_replicas": 1,
         "ray_actor_options": {},
         "user_config": {},

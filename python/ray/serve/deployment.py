@@ -132,10 +132,6 @@ class Deployment:
         return self._name
 
     @property
-    def version(self) -> Optional[str]:
-        return self._version
-
-    @property
     def func_or_class(self) -> Union[Callable, str]:
         """Underlying class or function that this deployment wraps."""
         return self._replica_config.deployment_def
@@ -161,13 +157,6 @@ class Deployment:
         return self._deployment_config.max_queued_requests
 
     @property
-    def route_prefix(self):
-        raise ValueError(
-            "`route_prefix` can no longer be specified at the deployment level. "
-            "Pass it to `serve.run` or in the application config instead."
-        )
-
-    @property
     def ray_actor_options(self) -> Optional[Dict]:
         """Actor options such as resources required for each replica."""
         return self._replica_config.ray_actor_options
@@ -179,14 +168,6 @@ class Deployment:
     @property
     def init_kwargs(self) -> Tuple[Any]:
         return self._replica_config.init_kwargs
-
-    @property
-    def url(self) -> Optional[str]:
-        logger.warning(
-            "DeprecationWarning: `Deployment.url` is deprecated "
-            "and will be removed in the future."
-        )
-        return None
 
     @property
     def logging_config(self) -> Dict:
@@ -213,9 +194,7 @@ class Deployment:
         self,
         func_or_class: Optional[Callable] = None,
         name: Default[str] = DEFAULT.VALUE,
-        version: Default[str] = DEFAULT.VALUE,
         num_replicas: Default[Optional[Union[int, str]]] = DEFAULT.VALUE,
-        route_prefix: Default[Union[str, None]] = DEFAULT.VALUE,
         ray_actor_options: Default[Optional[Dict]] = DEFAULT.VALUE,
         placement_group_bundles: Default[List[Dict[str, float]]] = DEFAULT.VALUE,
         placement_group_strategy: Default[str] = DEFAULT.VALUE,
@@ -255,12 +234,6 @@ class Deployment:
 
         Refer to the `@serve.deployment` decorator docs for available arguments.
         """
-        if route_prefix is not DEFAULT.VALUE:
-            raise ValueError(
-                "`route_prefix` can no longer be specified at the deployment level. "
-                "Pass it to `serve.run` or in the application config instead."
-            )
-
         # Modify max_ongoing_requests and autoscaling_config if
         # `num_replicas="auto"`
         if max_ongoing_requests is None:
@@ -306,14 +279,7 @@ class Deployment:
         if num_replicas == 0:
             raise ValueError("num_replicas is expected to larger than 0")
 
-        if not _internal and version is not DEFAULT.VALUE:
-            logger.warning(
-                "DeprecationWarning: `version` in `Deployment.options()` has been "
-                "deprecated. Explicitly specifying version will raise an error in the "
-                "future!"
-            )
-
-        elif num_replicas not in [DEFAULT.VALUE, None, "auto"]:
+        if num_replicas not in [DEFAULT.VALUE, None, "auto"]:
             new_deployment_config.num_replicas = num_replicas
 
         if user_config is not DEFAULT.VALUE:
@@ -336,8 +302,7 @@ class Deployment:
         if name is DEFAULT.VALUE:
             name = self._name
 
-        if version is DEFAULT.VALUE:
-            version = self._version
+        version = self._version
 
         if _init_args is DEFAULT.VALUE:
             _init_args = self._replica_config.init_args

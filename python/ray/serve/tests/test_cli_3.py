@@ -148,7 +148,7 @@ class TestRun:
             (
                 None,
                 "EveryNode",
-            ),  # default ProxyLocation `EveryNode` is used as http_options.location is not specified
+            ),  # default ProxyLocation `EveryNode` is used when proxy_location is not specified
             ("EveryNode", "EveryNode"),
             ("HeadOnly", "HeadOnly"),
             ("Disabled", "Disabled"),

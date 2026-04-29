@@ -86,7 +86,7 @@ from ray.serve._private.utils import (
     get_head_node_id,
     is_grpc_enabled,
 )
-from ray.serve.config import DeploymentMode, HTTPOptions, ProxyLocation, gRPCOptions
+from ray.serve.config import HTTPOptions, ProxyLocation, gRPCOptions
 from ray.serve.generated.serve_pb2 import (
     ActorNameList,
     ApplicationArgs,
@@ -209,7 +209,7 @@ class ServeController:
                 "on head node only."
             )
 
-            http_options.location = DeploymentMode.HeadOnly
+            http_options.proxy_location = ProxyLocation.HeadOnly
 
         # Configure proxy default HTTP and gRPC options.
         self.proxy_state_manager = ProxyStateManager(
@@ -1305,7 +1305,7 @@ class ServeController:
         return ServeInstanceDetails(
             target_capacity=self._target_capacity,
             controller_info=self._actor_details,
-            proxy_location=ProxyLocation._from_deployment_mode(http_config.location),
+            proxy_location=http_config.proxy_location,
             http_options=http_options,
             grpc_options=grpc_options,
             proxies=(

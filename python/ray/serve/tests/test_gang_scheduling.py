@@ -1441,7 +1441,6 @@ class TestGangScaling:
 
         @serve.deployment(
             name="D",
-            version="v1",
             num_replicas=initial_num_replicas,
             ray_actor_options={"num_cpus": 0.25},
             gang_scheduling_config=GangSchedulingConfig(gang_size=GANG_SIZE),
@@ -1759,7 +1758,6 @@ class TestGangAutoscaling:
             autoscaling_config={
                 "min_replicas": 3,
                 "max_replicas": 9,
-                "metrics_interval_s": 0.5,
                 "upscale_delay_s": 0.1,
                 "downscale_delay_s": 0.1,
                 "look_back_period_s": 1,
@@ -1835,7 +1833,6 @@ class TestGangAutoscaling:
                 "min_replicas": 6,
                 "max_replicas": 9,
                 "initial_replicas": 9,
-                "metrics_interval_s": 0.5,
                 "upscale_delay_s": 5,
                 # Must be long enough for all 9 gang-scheduled replicas to
                 # start before the autoscaler can trigger a downscale.
@@ -1900,7 +1897,6 @@ class TestGangMigration:
 
         @serve.deployment(
             name="D",
-            version="v1",
             num_replicas=4,
             ray_actor_options={"num_cpus": 0.25},
             gang_scheduling_config=GangSchedulingConfig(gang_size=2),

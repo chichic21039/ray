@@ -1,7 +1,6 @@
 import inspect
 import json
 import logging
-import warnings
 from enum import Enum
 from functools import cached_property
 from typing import Any, Callable, Dict, List, Optional, Tuple, Union
@@ -35,13 +34,14 @@ from ray.serve._private.constants import (
     DEFAULT_REQUEST_ROUTING_STATS_TIMEOUT_S,
     DEFAULT_TARGET_ONGOING_REQUESTS,
     DEFAULT_UVICORN_KEEP_ALIVE_TIMEOUT_S,
+    RAY_SERVE_REPLICA_AUTOSCALING_METRIC_PUSH_INTERVAL_S,
     RAY_SERVE_ROUTER_RETRY_BACKOFF_MULTIPLIER,
     RAY_SERVE_ROUTER_RETRY_INITIAL_BACKOFF_S,
     RAY_SERVE_ROUTER_RETRY_MAX_BACKOFF_S,
     SERVE_LOGGER_NAME,
 )
 from ray.serve._private.utils import validate_ssl_config
-from ray.util.annotations import Deprecated, PublicAPI
+from ray.util.annotations import PublicAPI
 
 logger = logging.getLogger(SERVE_LOGGER_NAME)
 
@@ -411,9 +411,6 @@ class RequestRouterConfig(BaseModel):
             ) from e
 
 
-DEFAULT_METRICS_INTERVAL_S = 10.0
-
-
 @PublicAPI(stability="alpha")
 class AggregationFunction(str, Enum):
     MEAN = "mean"
@@ -551,6 +548,8 @@ class AutoscalingPolicy(BaseModel):
 class AutoscalingConfig(BaseModel):
     """Config for the Serve Autoscaler."""
 
+    model_config = ConfigDict(extra="forbid")
+
     # Please keep these options in sync with those in
     # `src/ray/protobuf/serve.proto`.
 
@@ -561,29 +560,8 @@ class AutoscalingConfig(BaseModel):
 
     target_ongoing_requests: Optional[PositiveFloat] = DEFAULT_TARGET_ONGOING_REQUESTS
 
-    metrics_interval_s: PositiveFloat = Field(
-        default=DEFAULT_METRICS_INTERVAL_S,
-        description="[DEPRECATED] How often to scrape for metrics. "
-        "Will be replaced by the environment variables "
-        "`RAY_SERVE_REPLICA_AUTOSCALING_METRIC_PUSH_INTERVAL_S` and "
-        "`RAY_SERVE_HANDLE_AUTOSCALING_METRIC_PUSH_INTERVAL_S` in a future release.",
-    )
     look_back_period_s: PositiveFloat = Field(
         default=30.0, description="Time window to average over for metrics."
-    )
-
-    smoothing_factor: PositiveFloat = Field(
-        default=1.0,
-        description="[DEPRECATED] Smoothing factor for autoscaling decisions.",
-    )
-    # DEPRECATED: replaced by `downscaling_factor`
-    upscale_smoothing_factor: Optional[PositiveFloat] = Field(
-        default=None, description="[DEPRECATED] Please use `upscaling_factor` instead."
-    )
-    # DEPRECATED: replaced by `upscaling_factor`
-    downscale_smoothing_factor: Optional[PositiveFloat] = Field(
-        default=None,
-        description="[DEPRECATED] Please use `downscaling_factor` instead.",
     )
 
     upscaling_factor: Optional[PositiveFloat] = Field(
@@ -647,33 +625,15 @@ class AutoscalingConfig(BaseModel):
 
         return self
 
-    @field_validator("metrics_interval_s")
-    @classmethod
-    def metrics_interval_s_deprecation_warning(cls, v: PositiveFloat) -> PositiveFloat:
-        if v != DEFAULT_METRICS_INTERVAL_S:
-            warnings.warn(
-                "The `metrics_interval_s` field in AutoscalingConfig is deprecated and "
-                "will be replaced by the environment variables "
-                "`RAY_SERVE_REPLICA_AUTOSCALING_METRIC_PUSH_INTERVAL_S` and "
-                "`RAY_SERVE_HANDLE_AUTOSCALING_METRIC_PUSH_INTERVAL_S` in a future release.",
-                DeprecationWarning,
-            )
-        return v
-
     @field_validator("look_back_period_s")
     @classmethod
     def look_back_period_s_valid(cls, v: PositiveFloat, info):
-        # Get metrics_interval_s from info.data, or use default if not set
-        metrics_interval_s = info.data.get(
-            "metrics_interval_s", DEFAULT_METRICS_INTERVAL_S
-        )
-        if v <= metrics_interval_s:
-            # Warns currently, will raise an exception in a future release
-            warnings.warn(
-                f"`look_back_period_s` ({v}) must be greater than `metrics_interval_s` "
-                f"({metrics_interval_s}). This will raise an exception in a future "
-                f"release. Please set `look_back_period_s` > `metrics_interval_s`.",
-                FutureWarning,
+        metrics_push_interval_s = RAY_SERVE_REPLICA_AUTOSCALING_METRIC_PUSH_INTERVAL_S
+        if v <= metrics_push_interval_s:
+            raise ValueError(
+                f"`look_back_period_s` ({v}) must be greater than "
+                "`RAY_SERVE_REPLICA_AUTOSCALING_METRIC_PUSH_INTERVAL_S` "
+                f"({metrics_push_interval_s})."
             )
         return v
 
@@ -696,24 +656,16 @@ class AutoscalingConfig(BaseModel):
         if self.upscaling_factor:
             return self.upscaling_factor
 
-        return self.upscale_smoothing_factor or self.smoothing_factor
+        return 1.0
 
     def get_downscaling_factor(self) -> PositiveFloat:
         if self.downscaling_factor:
             return self.downscaling_factor
 
-        return self.downscale_smoothing_factor or self.smoothing_factor
+        return 1.0
 
     def get_target_ongoing_requests(self) -> PositiveFloat:
         return self.target_ongoing_requests
-
-
-# Keep in sync with ServeDeploymentMode in dashboard/client/src/type/serve.ts
-@Deprecated
-class DeploymentMode(str, Enum):
-    NoServer = "NoServer"
-    HeadOnly = "HeadOnly"
-    EveryNode = "EveryNode"
 
 
 @PublicAPI(stability="stable")
@@ -732,46 +684,6 @@ class ProxyLocation(str, Enum):
     Disabled = "Disabled"
     HeadOnly = "HeadOnly"
     EveryNode = "EveryNode"
-
-    @classmethod
-    def _to_deployment_mode(
-        cls, proxy_location: Union["ProxyLocation", str]
-    ) -> DeploymentMode:
-        if isinstance(proxy_location, str):
-            proxy_location = ProxyLocation(proxy_location)
-        elif not isinstance(proxy_location, ProxyLocation):
-            raise TypeError(
-                f"Must be a `ProxyLocation` or str, got: {type(proxy_location)}."
-            )
-
-        if proxy_location == ProxyLocation.Disabled:
-            return DeploymentMode.NoServer
-        else:
-            return DeploymentMode(proxy_location.value)
-
-    @classmethod
-    def _from_deployment_mode(
-        cls, deployment_mode: Optional[Union[DeploymentMode, str]]
-    ) -> Optional["ProxyLocation"]:
-        """Converts DeploymentMode enum into ProxyLocation enum.
-
-        DeploymentMode is a deprecated version of ProxyLocation that's still
-        used internally throughout Serve.
-        """
-
-        if deployment_mode is None:
-            return None
-        elif isinstance(deployment_mode, str):
-            deployment_mode = DeploymentMode(deployment_mode)
-        elif not isinstance(deployment_mode, DeploymentMode):
-            raise TypeError(
-                f"Must be a `DeploymentMode` or str, got: {type(deployment_mode)}."
-            )
-
-        if deployment_mode == DeploymentMode.NoServer:
-            return ProxyLocation.Disabled
-        else:
-            return ProxyLocation(deployment_mode.value)
 
 
 @PublicAPI(stability="stable")
@@ -795,25 +707,12 @@ class HTTPOptions(BaseModel):
     - ssl_keyfile_password: Optional password for the SSL key file.
     - ssl_ca_certs: Optional path to CA certificate file for client certificate
       verification.
-
-    - location: [DEPRECATED: use `proxy_location` field instead] The deployment
-      location of HTTP servers:
-
-        - "HeadOnly": start one HTTP server on the head node. Serve
-          assumes the head node is the node you executed serve.start
-          on. This is the default.
-        - "EveryNode": start one HTTP server per node.
-        - "NoServer": disable HTTP server.
-
-    - num_cpus: [DEPRECATED] The number of CPU cores to reserve for each
-      internal Serve HTTP proxy actor.
+    - proxy_location: Where to run HTTP proxies.
     """
 
     host: Optional[str] = DEFAULT_HTTP_HOST
     port: int = DEFAULT_HTTP_PORT
-    middlewares: List[Any] = []
-    location: Optional[DeploymentMode] = DeploymentMode.HeadOnly
-    num_cpus: int = 0
+    proxy_location: ProxyLocation = ProxyLocation.HeadOnly
     root_url: str = ""
     root_path: str = ""
     request_timeout_s: Optional[float] = None
@@ -823,13 +722,16 @@ class HTTPOptions(BaseModel):
     ssl_keyfile_password: Optional[str] = None
     ssl_ca_certs: Optional[str] = None
 
-    model_config = ConfigDict(validate_assignment=True, arbitrary_types_allowed=True)
+    model_config = ConfigDict(
+        validate_assignment=True, arbitrary_types_allowed=True, extra="forbid"
+    )
+    _middlewares: List[Any] = PrivateAttr(default_factory=list)
 
     @model_validator(mode="after")
-    def location_backfill_no_server(self):
-        if self.host is None or self.location is None:
+    def proxy_location_backfill_disabled(self):
+        if self.host is None:
             # Use object.__setattr__ since the model may have frozen=True behavior
-            object.__setattr__(self, "location", DeploymentMode.NoServer)
+            object.__setattr__(self, "proxy_location", ProxyLocation.Disabled)
         return self
 
     @field_validator("ssl_certfile")
@@ -837,28 +739,6 @@ class HTTPOptions(BaseModel):
     def validate_ssl_certfile(cls, v, info):
         ssl_keyfile = info.data.get("ssl_keyfile")
         validate_ssl_config(v, ssl_keyfile)
-        return v
-
-    @field_validator("middlewares")
-    @classmethod
-    def warn_for_middlewares(cls, v):
-        if v:
-            warnings.warn(
-                "Passing `middlewares` to HTTPOptions is deprecated and will be "
-                "removed in a future version. Consider using the FastAPI integration "
-                "to configure middlewares on your deployments: "
-                "https://docs.ray.io/en/latest/serve/http-guide.html#fastapi-http-deployments"  # noqa 501
-            )
-        return v
-
-    @field_validator("num_cpus")
-    @classmethod
-    def warn_for_num_cpus(cls, v):
-        if v:
-            warnings.warn(
-                "Passing `num_cpus` to HTTPOptions is deprecated and will be "
-                "removed in a future version."
-            )
         return v
 
 

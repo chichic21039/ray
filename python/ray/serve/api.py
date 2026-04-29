@@ -451,9 +451,7 @@ def ingress(app: Union[ASGIApp, Callable]) -> Callable:
 def deployment(
     _func_or_class: Optional[Callable] = None,
     name: Default[str] = DEFAULT.VALUE,
-    version: Default[str] = DEFAULT.VALUE,
     num_replicas: Default[Optional[Union[int, str]]] = DEFAULT.VALUE,
-    route_prefix: Default[Union[str, None]] = DEFAULT.VALUE,
     ray_actor_options: Default[Dict] = DEFAULT.VALUE,
     placement_group_bundles: Default[List[Dict[str, float]]] = DEFAULT.VALUE,
     placement_group_strategy: Default[str] = DEFAULT.VALUE,
@@ -499,10 +497,8 @@ def deployment(
         _func_or_class: The class or function to be decorated.
         name: Name uniquely identifying this deployment within the application.
             If not provided, the name of the class or function is used.
-        version: Version of the deployment. Deprecated.
         num_replicas: Number of replicas to run that handle requests to
             this deployment. Defaults to 1.
-        route_prefix: Route prefix for HTTP requests. Defaults to '/'. Deprecated.
         ray_actor_options: Options to pass to the Ray Actor decorator, such as
             resource requirements. Valid options are: `accelerator_type`, `memory`,
             `num_cpus`, `num_gpus`, `resources`, `runtime_env`, and `label_selector`.
@@ -561,12 +557,6 @@ def deployment(
     Returns:
         `Deployment`
     """
-    if route_prefix is not DEFAULT.VALUE:
-        raise ValueError(
-            "`route_prefix` can no longer be specified at the deployment level. "
-            "Pass it to `serve.run` or in the application config instead."
-        )
-
     if max_ongoing_requests is None:
         raise ValueError("`max_ongoing_requests` must be non-null, got None.")
 
@@ -618,12 +608,6 @@ def deployment(
         raise ValueError(
             "Manually setting num_replicas is not allowed when "
             "autoscaling_config is provided."
-        )
-
-    if version is not DEFAULT.VALUE:
-        logger.warning(
-            "DeprecationWarning: `version` in `@serve.deployment` has been deprecated. "
-            "Explicitly specifying version will raise an error in the future!"
         )
 
     if isinstance(logging_config, LoggingConfig):
@@ -683,7 +667,7 @@ def deployment(
             name if name is not DEFAULT.VALUE else _func_or_class.__name__,
             deployment_config,
             replica_config,
-            version=(version if version is not DEFAULT.VALUE else None),
+            version=None,
             _internal=True,
         )
 

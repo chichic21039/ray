@@ -34,7 +34,6 @@ from ray.serve.config import (
     AggregationFunction,
     AutoscalingConfig,
     DeploymentActorConfig,
-    DeploymentMode,
     GangPlacementStrategy,
     GangRuntimeFailurePolicy,
     GangSchedulingConfig,
@@ -460,10 +459,10 @@ class DeploymentConfig(BaseModel):
                 **data["request_router_config"]
             )
         if "autoscaling_config" in data:
-            if not data["autoscaling_config"].get("upscale_smoothing_factor"):
-                data["autoscaling_config"]["upscale_smoothing_factor"] = None
-            if not data["autoscaling_config"].get("downscale_smoothing_factor"):
-                data["autoscaling_config"]["downscale_smoothing_factor"] = None
+            data["autoscaling_config"].pop("metrics_interval_s", None)
+            data["autoscaling_config"].pop("smoothing_factor", None)
+            data["autoscaling_config"].pop("upscale_smoothing_factor", None)
+            data["autoscaling_config"].pop("downscale_smoothing_factor", None)
             if not data["autoscaling_config"].get("upscaling_factor"):
                 data["autoscaling_config"]["upscaling_factor"] = None
             if not data["autoscaling_config"].get("downscaling_factor"):
@@ -1093,12 +1092,13 @@ def prepare_imperative_http_options(
     proxy_location: Union[None, str, ProxyLocation],
     http_options: Union[None, dict, HTTPOptions],
 ) -> HTTPOptions:
-    """Prepare `HTTPOptions` with a resolved `location` based on `proxy_location` and `http_options`.
+    """Prepare `HTTPOptions` with a resolved `proxy_location`.
 
     Precedence:
-    - If `proxy_location` is provided, it overrides any `location` in `http_options`.
-    - Else if `http_options` specifies a `location` explicitly (HTTPOptions(...) or dict with 'location'), keep it.
-    - Else (no `proxy_location` and no explicit `location`) set `location` to `DeploymentMode.EveryNode`.
+    - If `proxy_location` is provided, it overrides `http_options.proxy_location`.
+    - Else if `http_options` specifies `proxy_location`, keep it.
+    - Else (no `proxy_location` and no explicit `proxy_location`) set it to
+      `ProxyLocation.EveryNode`.
       A bare `HTTPOptions()` counts as an explicit default (`HeadOnly`).
 
     Args:
@@ -1106,11 +1106,11 @@ def prepare_imperative_http_options(
         http_options: Optional HTTPOptions instance or dict. If None, a new HTTPOptions() is created.
 
     Returns:
-        HTTPOptions: New instance with resolved location.
+        HTTPOptions: New instance with resolved proxy location.
 
     Note:
-        1. Default ProxyLocation (when unspecified) resolves to DeploymentMode.EveryNode.
-        2. Default HTTPOptions() location is DeploymentMode.HeadOnly.
+        1. Default ProxyLocation (when unspecified) resolves to ProxyLocation.EveryNode.
+        2. Default HTTPOptions() proxy_location is ProxyLocation.HeadOnly.
         3. `HTTPOptions` is used in `imperative` mode (Python API) cluster set-up.
             `Declarative` mode (CLI / REST) uses `HTTPOptionsSchema`.
 
@@ -1118,14 +1118,15 @@ def prepare_imperative_http_options(
         ValueError: If http_options is not None, dict, or HTTPOptions.
     """
     if http_options is None:
-        location_set_explicitly = False
+        proxy_location_set_explicitly = False
         http_options = HTTPOptions()
     elif isinstance(http_options, dict):
-        location_set_explicitly = "location" in http_options
+        proxy_location_set_explicitly = "proxy_location" in http_options
         http_options = HTTPOptions(**http_options)
     elif isinstance(http_options, HTTPOptions):
-        # empty `HTTPOptions()` is considered as user specified the default location value `HeadOnly` explicitly
-        location_set_explicitly = True
+        # empty `HTTPOptions()` is considered as user specified the default
+        # proxy_location value `HeadOnly` explicitly.
+        proxy_location_set_explicitly = True
         http_options = HTTPOptions(**http_options.model_dump(exclude_unset=True))
     else:
         raise ValueError(
@@ -1133,9 +1134,9 @@ def prepare_imperative_http_options(
         )
 
     if proxy_location is None:
-        if not location_set_explicitly:
-            http_options.location = DeploymentMode.EveryNode
+        if not proxy_location_set_explicitly:
+            http_options.proxy_location = ProxyLocation.EveryNode
     else:
-        http_options.location = ProxyLocation._to_deployment_mode(proxy_location)
+        http_options.proxy_location = ProxyLocation(proxy_location)
 
     return http_options

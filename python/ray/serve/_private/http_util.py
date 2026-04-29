@@ -696,7 +696,7 @@ async def start_asgi_http_server(
 
     Returns a task that blocks until the server exits (e.g., due to error).
     """
-    app = _apply_middlewares(app, http_options.middlewares)
+    app = _apply_middlewares(app, http_options._middlewares)
 
     sock = socket.socket(
         socket.AF_INET6 if is_ipv6(http_options.host) else socket.AF_INET,
@@ -829,7 +829,7 @@ def configure_http_options_with_defaults(http_options: HTTPOptions) -> HTTPOptio
             http_options.request_timeout_s or RAY_SERVE_REQUEST_PROCESSING_TIMEOUT_S
         )
 
-    http_options.middlewares = http_options.middlewares or []
+    http_options._middlewares = http_options._middlewares or []
 
     return http_options
 
@@ -845,7 +845,7 @@ def configure_http_middlewares(http_options: HTTPOptions) -> HTTPOptions:
         )
 
         # noinspection PyTypeChecker
-        http_options.middlewares.extend(
+        http_options._middlewares.extend(
             validate_http_proxy_callback_return(
                 call_function_from_import_path(
                     RAY_SERVE_HTTP_PROXY_CALLBACK_IMPORT_PATH

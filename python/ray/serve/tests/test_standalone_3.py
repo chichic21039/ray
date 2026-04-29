@@ -27,7 +27,7 @@ from ray.util.state import list_actors
 # We skip them if proxy is not available.
 def is_proxy_on_every_node() -> bool:
     client = _get_global_client()
-    return client._http_config.location == "EveryNode"
+    return client._http_config.proxy_location == "EveryNode"
 
 
 @pytest.fixture

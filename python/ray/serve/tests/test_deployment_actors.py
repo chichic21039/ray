@@ -691,7 +691,6 @@ def test_redeployment_replaces_actors(serve_instance):
                 init_kwargs={"start": 1},
             ),
         ],
-        version="v1",
     )
     class MyDeployment:
         def __call__(self):
@@ -713,7 +712,6 @@ def test_redeployment_replaces_actors(serve_instance):
                 init_kwargs={"start": 2},
             ),
         ],
-        version="v2",
     )
     class MyDeployment:  # noqa: F811
         def __call__(self):
@@ -740,7 +738,6 @@ def test_replica_context_includes_code_version(serve_instance):
                 init_kwargs={"start": 1},
             ),
         ],
-        version="v1",
     )
     class MyDeployment:
         def __call__(self):
@@ -761,7 +758,6 @@ def test_replica_context_includes_code_version(serve_instance):
                 init_kwargs={"start": 2},
             ),
         ],
-        version="v2",
     )
     class MyDeployment:  # noqa: F811
         def __call__(self):
@@ -788,7 +784,6 @@ def test_redeployment_with_no_actors_cleans_up_old(serve_instance):
                 init_kwargs={"start": 0},
             ),
         ],
-        version="v1",
     )
     class MyDeployment:
         def __call__(self):
@@ -799,7 +794,7 @@ def test_redeployment_with_no_actors_cleans_up_old(serve_instance):
     wait_for_condition(lambda: httpx.get(url).text == "v1")
     wait_for_condition(lambda: _check_deployment_actor_count(1))
 
-    @serve.deployment(version="v2")
+    @serve.deployment
     class MyDeployment:  # noqa: F811
         def __call__(self):
             return "v2"

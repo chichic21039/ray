@@ -279,7 +279,6 @@ def base_http_options():
         port=8000,
         request_timeout_s=30.0,
         keep_alive_timeout_s=5.0,
-        middlewares=[],
     )
 
 
@@ -295,7 +294,7 @@ class TestConfigureHttpOptionsWithDefaults:
         # Keep alive timeout should be preserved (no env override)
         assert result.keep_alive_timeout_s == 5.0
         # Should initialize middlewares list
-        assert result.middlewares == []
+        assert result._middlewares == []
         # Original should not be modified
         assert base_http_options.request_timeout_s == 30.0
 
@@ -328,8 +327,8 @@ class TestConfigureHttpOptionsWithDefaults:
         mock_call_function.assert_called_once_with(
             "my.module.callback"
         )  # Verify callback execution
-        assert len(result.middlewares) == 1  # Ensure one middleware was injected
-        assert isinstance(result.middlewares[0], Middleware)
+        assert len(result._middlewares) == 1  # Ensure one middleware was injected
+        assert isinstance(result._middlewares[0], Middleware)
 
     def test_callback_middleware_disabled(self, base_http_options):
         """Test that callback middleware is not loaded when disabled."""
@@ -340,7 +339,7 @@ class TestConfigureHttpOptionsWithDefaults:
             result = configure_http_options_with_defaults(base_http_options)
 
             # Assert that no callback middleware is added
-            assert result.middlewares == []
+            assert result._middlewares == []
 
     def test_deep_copy_behavior(self, base_http_options):
         """Test that an original HTTPOptions object is not modified."""
