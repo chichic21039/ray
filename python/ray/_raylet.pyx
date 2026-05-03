@@ -200,6 +200,7 @@ include "includes/rpc_token_authentication.pxi"
 include "includes/task_options_utils.pxi"
 # Ray Serve-only: Cython timeseries utilities for autoscaling metrics.
 include "includes/timeseries_utils.pxi"
+include "includes/task_options_utils.pxi"
 
 import ray
 from ray.exceptions import (
@@ -634,33 +635,9 @@ cdef int prepare_resources(
             resource_map[0][key.encode("ascii")] = float(value)
     return 0
 
-cdef c_vector[CFunctionDescriptor] prepare_function_descriptors(pyfd_list):
-    cdef:
-        c_vector[CFunctionDescriptor] fd_list
-
-    fd_list.reserve(len(pyfd_list))
-    for pyfd in pyfd_list:
-        fd_list.push_back(CFunctionDescriptorBuilder.BuildPython(
-            pyfd.module_name, pyfd.class_name, pyfd.function_name, b""))
-    return fd_list
 
 
-cdef int prepare_actor_concurrency_groups(
-        dict concurrency_groups_dict,
-        c_vector[CConcurrencyGroup] *concurrency_groups):
 
-    cdef:
-        c_vector[CFunctionDescriptor] c_fd_list
-
-    if concurrency_groups_dict is None:
-        raise ValueError("Must provide it...")
-
-    concurrency_groups.reserve(len(concurrency_groups_dict))
-    for key, value in concurrency_groups_dict.items():
-        c_fd_list = prepare_function_descriptors(value["function_descriptors"])
-        concurrency_groups.push_back(CConcurrencyGroup(
-            key.encode("ascii"), value["max_concurrency"], move(c_fd_list)))
-    return 1
 
 
 def raise_sys_exit_with_custom_error_message(
