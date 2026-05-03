@@ -197,6 +197,7 @@ include "includes/setproctitle.pxi"
 include "includes/raylet_client.pxi"
 include "includes/gcs_subscriber.pxi"
 include "includes/rpc_token_authentication.pxi"
+include "includes/task_options_utils.pxi"
 # Ray Serve-only: Cython timeseries utilities for autoscaling metrics.
 include "includes/timeseries_utils.pxi"
 
@@ -572,67 +573,6 @@ cdef class Language:
     PYTHON = Language.from_native(LANGUAGE_PYTHON)
     CPP = Language.from_native(LANGUAGE_CPP)
     JAVA = Language.from_native(LANGUAGE_JAVA)
-
-
-cdef int prepare_labels(
-        dict label_dict,
-        unordered_map[c_string, c_string] *label_map) except -1:
-
-    if label_dict is None:
-        return 0
-
-    label_map[0].reserve(len(label_dict))
-    for key, value in label_dict.items():
-        if not isinstance(key, str):
-            raise ValueError(f"Label key must be string, but got {type(key)}")
-        if not isinstance(value, str):
-            raise ValueError(f"Label value must be string, but got {type(value)}")
-        label_map[0][key.encode("utf-8")] = value.encode("utf-8")
-
-    return 0
-
-cdef int prepare_label_selector(
-        dict label_selector_dict,
-        CLabelSelector *c_label_selector) except -1:
-
-    c_label_selector[0] = CLabelSelector()
-
-    if label_selector_dict is None:
-        return 0
-
-    for key, value in label_selector_dict.items():
-        if not isinstance(key, str):
-            raise ValueError(f"Label selector key type must be string, but got {type(key)}")
-        if not isinstance(value, str):
-            raise ValueError(f"Label selector value must be string, but got {type(value)}")
-        if key == "":
-            raise ValueError("Label selector key must be a non-empty string.")
-        if (value.startswith("in(") and value.endswith(")")) or \
-           (value.startswith("!in(") and value.endswith(")")):
-            inner = value[value.index("(")+1:-1].strip()
-            if not inner:
-                raise ValueError(f"No values provided for Label Selector '{value[:value.index('(')]}' operator on key '{key}'.")
-        # Add key-value constraint to the LabelSelector object.
-        c_label_selector[0].AddConstraint(key.encode("utf-8"), value.encode("utf-8"))
-
-    return 0
-
-def node_labels_match_selector(node_labels: Dict[str, str], selector: Dict[str, str]) -> bool:
-    """
-    Checks if the given node labels satisfy the label selector. This helper function exposes
-    the C++ logic for determining if a node satisfies a label selector to the Python layer.
-    """
-    cdef:
-        CNodeResources c_node_resources
-        CLabelSelector c_label_selector
-        unordered_map[c_string, c_string] c_labels_map
-
-    prepare_labels(node_labels, &c_labels_map)
-    SetNodeResourcesLabels(c_node_resources, c_labels_map)
-    prepare_label_selector(selector, &c_label_selector)
-
-    # Return whether the node resources satisfy the label constraint.
-    return c_node_resources.HasRequiredLabels(c_label_selector)
 
 cdef int prepare_fallback_strategy(
         list fallback_strategy,
