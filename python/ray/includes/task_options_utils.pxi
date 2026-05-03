@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 cdef c_vector[CFunctionDescriptor] prepare_function_descriptors(pyfd_list):
     cdef:
         c_vector[CFunctionDescriptor] fd_list
@@ -25,4 +24,3 @@ cdef int prepare_actor_concurrency_groups(
         concurrency_groups.push_back(CConcurrencyGroup(
             key.encode("ascii"), value["max_concurrency"], move(c_fd_list)))
     return 1
->>>>>>> 9e3939c6eb2fce96929813baae82dd8a237155c9
